@@ -73,7 +73,10 @@ class Control {
             return;
         }
 
+        $start = substr(microtime(), 0, 10);
         $result = $this->conn->query($query);
+        $end = substr(microtime(), 0, 10);
+        $exec_time = substr($end - $start, 0, 10);
 
         if ($this->conn->error) {
 
@@ -90,47 +93,68 @@ class Control {
             echo $this->callback.'(';
         }
 
+        $start = substr(microtime(), 0, 10);
+
         echo '{success:true,';
+        echo 'exec_time:'.$exec_time.',';
         $affected_rows = $this->conn->affected_rows;
-        echo 'affected_rows : '.$affected_rows.',';
+        echo 'affected_rows:'.$affected_rows.',';
 
         $insert_id = $this->conn->insert_id;
-        echo 'insert_id : '.$insert_id.',';
+        echo 'insert_id:'.$insert_id.',';
 
-        $fields = $result->fetch_fields();
-        foreach($fields as $idx => $row){
-            
-            array_push($this->fields, array(
-                'name' => $row->name,
-                'type' => $this->types[$row->type],
-                'table' => $row->table,
-                'max_length' => $row->max_length
-            ));
+        if(method_exists($result, 'fetch_fields')){
+
+            $fields = $result->fetch_fields();
+            foreach($fields as $idx => $row){
+                
+                array_push($this->fields, array(
+                    'name' => $row->name,
+                    'type' => $this->types[$row->type],
+                    'table' => $row->table,
+                    'max_length' => $row->max_length
+                ));
+            }
+
+            $is_result_query = true;
+        }
+        else {
+
+            $is_result_query = false;
         }
 
-        echo 'fields:'.json_encode($this->fields).',';
-
-        $is_result_query = false;
+        echo 'fields:'.json_encode($this->fields).',';      
 
         echo "records:[";
-        $idx = 0;
 
-        while ($row = $result->fetch_array(MYSQLI_ASSOC))
-        {
-            $this->field_idx = 0;
-            $is_result_query = true;
+        if(method_exists($result, 'fetch_array')){
 
-            if($idx > 0){ 
-                
-                echo ",";
+            $idx = 0;
+            while ($row = $result->fetch_array(MYSQLI_ASSOC))
+            {
+                $this->field_idx = 0;
+
+                if($idx > 0){ 
+                    
+                    echo ",";
+                }
+                echo json_encode(array_map(array($this, 'removeHTML'), array_values($row)));
+                $idx++;
             }
-            echo json_encode(array_map(array($this, 'removeHTML'), array_values($row)));
-            $idx++;
         }
+        
         echo "],";
 
-        echo 'is_result_query : '.($is_result_query ? 'true' : 'false');
+        echo 'is_result_query:'.($is_result_query ? 'true':'false').",";
 
+        $end = substr(microtime(), 0, 10);
+        $transfer_time = substr($end - $start, 0, 10);
+
+        echo 'transfer_time:'.$transfer_time.',';
+
+        $total_time = $exec_time + $transfer_time;
+        
+        echo 'total_time:'.$total_time;
         echo "}";
 
         if($this->callback !== null){
@@ -185,7 +209,7 @@ class Control {
 
 extract($_GET);
 
-define('DEBUG', false);
+define('DEBUG', true);
 define('JSONP', (bool)isset($callback));
 
 if(DEBUG == true) {
